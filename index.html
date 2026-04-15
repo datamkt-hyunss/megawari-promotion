@@ -177,7 +177,11 @@
 
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
-  <div style="font-size:.82rem;color:var(--text-muted)">데이터를 불러오는 중...</div>
+  <div id="loadingMsg" style="font-size:.85rem;color:var(--text-primary);font-weight:500">데이터를 불러오는 중...</div>
+  <div id="loadingSubMsg" style="font-size:.75rem;color:var(--text-muted);margin-top:.15rem">잠시만 기다려주세요</div>
+  <div style="margin-top:1rem;width:200px;height:3px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden">
+    <div id="loadingBar" style="height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width .4s ease"></div>
+  </div>
 </div>
 <div id="toast"></div>
 
@@ -402,6 +406,9 @@ let optBlockSeq = 0;
 // INIT
 // ══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
+  // GAS 콜드스타트 단축: 페이지 로드 즉시 워밍업 핑 전송
+  fetch(GAS_URL + '?action=ping').catch(() => {});
+
   loadAll();
   initCalendar();
   document.getElementById('seasonSelect').addEventListener('change', () => {
@@ -435,13 +442,47 @@ async function apiPost(body) {
 // ══════════════════════════════════════════
 // LOAD
 // ══════════════════════════════════════════
+
+// 로딩 진행 상태 메시지
+const LOAD_MSGS = [
+  { pct: 10, msg: '서버 연결 중...', sub: 'GAS 서버를 깨우는 중입니다' },
+  { pct: 35, msg: '기준 데이터 로딩 중...', sub: '회차 및 상품코드 목록' },
+  { pct: 65, msg: '상품 정보 불러오는 중...', sub: '등록된 상품 및 옵션 데이터' },
+  { pct: 85, msg: '프로모션 일정 불러오는 중...', sub: '캘린더 이벤트 준비' },
+  { pct: 100, msg: '완료!', sub: '잠시만 기다려주세요' },
+];
+
+function setLoadProgress(pct) {
+  const bar = document.getElementById('loadingBar');
+  if (bar) bar.style.width = pct + '%';
+}
+function setLoadMsg(pct) {
+  const step = LOAD_MSGS.slice().reverse().find(m => pct >= m.pct - 30) || LOAD_MSGS[0];
+  const m = document.getElementById('loadingMsg');
+  const s = document.getElementById('loadingSubMsg');
+  if (m) m.textContent = step.msg;
+  if (s) s.textContent = step.sub;
+}
+
 async function loadAll() {
   showLoading(true);
+  setLoadProgress(10); setLoadMsg(10);
   try {
+    // 1단계: Index 먼저 (드롭다운에 필요)
     await loadIndexData();
-    await Promise.all([loadProducts(), loadPromotions()]);
-  } finally { showLoading(false); }
+    setLoadProgress(40); setLoadMsg(40);
+
+    // 2단계: 상품 + 프로모션 동시 요청
+    await Promise.all([
+      loadProducts().then(() => { setLoadProgress(70); setLoadMsg(70); }),
+      loadPromotions().then(() => { setLoadProgress(90); setLoadMsg(90); }),
+    ]);
+    setLoadProgress(100); setLoadMsg(100);
+  } finally {
+    setTimeout(() => showLoading(false), 300);
+  }
 }
+
 async function refreshData() {
   await loadAll(); showToast('데이터를 새로고침했습니다.');
 }
@@ -888,7 +929,10 @@ document.querySelectorAll('.modal-backdrop').forEach(b =>
 // ══════════════════════════════════════════
 // LOADING & TOAST
 // ══════════════════════════════════════════
-function showLoading(v) { document.getElementById('loadingOverlay').classList.toggle('show', v); }
+function showLoading(v) {
+  document.getElementById('loadingOverlay').classList.toggle('show', v);
+  if (v) { setLoadProgress(0); }
+}
 let _toast;
 function showToast(msg, err=false) {
   const t = document.getElementById('toast');
