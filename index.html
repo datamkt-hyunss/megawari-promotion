@@ -154,8 +154,25 @@
   .fc-theme-standard .fc-scrollgrid{border-color:var(--border) !important}
   .fc .fc-daygrid-day-number{color:var(--text-muted) !important;font-size:.75rem}
   .fc .fc-day-today .fc-daygrid-day-number{color:var(--accent) !important;font-weight:700}
-  .fc .fc-event{border-radius:4px !important;border:none !important;font-size:.72rem !important;padding:2px 5px !important;cursor:pointer}
-  .fc .fc-more-link{color:var(--accent) !important;font-size:.72rem}
+
+  /* 이벤트 바 스타일 */
+  .fc .fc-event{border-radius:3px !important;border:none !important;font-size:.72rem !important;cursor:pointer;margin-bottom:2px !important}
+  .fc .fc-event .fc-event-main{padding:2px 6px !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;line-height:1.5}
+  .fc .fc-daygrid-event-harness{margin-bottom:1px !important}
+
+  /* 셀 높이 — 이벤트가 많아도 셀이 자동 확장 */
+  .fc .fc-daygrid-day-frame{min-height:90px !important}
+  .fc .fc-daygrid-body-natural .fc-daygrid-day-events{padding-bottom:4px}
+
+  /* +N more 링크 */
+  .fc .fc-more-link{color:var(--accent) !important;font-size:.72rem;font-weight:600;padding:1px 4px}
+  .fc .fc-more-link:hover{text-decoration:underline}
+
+  /* 팝오버 (more 클릭 시) */
+  .fc .fc-popover{background:var(--bg-card2) !important;border:1px solid var(--border) !important;border-radius:8px !important;box-shadow:0 8px 24px rgba(0,0,0,.5) !important}
+  .fc .fc-popover-header{background:var(--bg-card) !important;color:var(--text-primary) !important;font-size:.78rem !important;border-radius:8px 8px 0 0 !important;padding:.5rem .75rem !important}
+  .fc .fc-popover-body{padding:.5rem .4rem !important}
+  .fc .fc-popover-close{color:var(--text-muted) !important}
 
   /* Toast / Loading */
   #toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg-card2);border:1px solid var(--border);border-left:3px solid var(--teal);color:var(--text-primary);padding:.75rem 1.25rem;border-radius:8px;font-size:.83rem;z-index:9999;transform:translateX(200%);transition:transform .3s ease;max-width:340px}
@@ -842,6 +859,9 @@ function deletePromoFromDetail() { if (selectedPromoForDetail) deletePromotion(s
 // ══════════════════════════════════════════
 // CALENDAR
 // ══════════════════════════════════════════
+
+// 표시 순서: 프로모션(0) → 내부광고(1) → 외부광고(2)
+const TYPE_ORDER = { '프로모션':0, '내부광고':1, '내부':1, '외부광고':2, '외부':2 };
 const TYPE_COLORS = {
   '내부광고':{ bg:'#4a90d9', bd:'#3a7ac9' },
   '외부광고':{ bg:'#9b59b6', bd:'#8a49a6' },
@@ -853,27 +873,53 @@ const DEFAULT_COLOR = { bg:'#ff6b35', bd:'#ff5420' };
 
 function initCalendar() {
   calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
-    initialView:'dayGridMonth', locale:'ko', height:640,
-    headerToolbar:{ left:'prev,next today', center:'title', right:'dayGridMonth,timeGridWeek,listMonth' },
-    buttonText:{ today:'오늘', month:'월', week:'주', list:'목록' },
-    eventClick(info) { const p = promotions.find(x => x.ID===info.event.id); if(p) showPromoDetail(p); },
+    initialView: 'dayGridMonth',
+    locale: 'ko',
+    height: 'auto',          // ★ 셀 높이 자동 확장 (이벤트 수에 따라 늘어남)
+    dayMaxEvents: true,       // ★ 넘치면 "+N more" 로 접기 (겹치지 않음)
+    eventOrder: 'typeOrder,title', // ★ typeOrder 필드 기준 정렬
+    headerToolbar: { left:'prev,next today', center:'title', right:'dayGridMonth,timeGridWeek,listMonth' },
+    buttonText: { today:'오늘', month:'월', week:'주', list:'목록' },
+    eventClick(info) {
+      const p = promotions.find(x => x.ID === info.event.id);
+      if (p) showPromoDetail(p);
+    },
     dateClick(info) {
       document.getElementById('promoStartDate').value = info.dateStr;
       document.getElementById('promoEndDate').value   = info.dateStr;
       openPromoModal();
     },
-    eventDidMount(info) { info.el.title = info.event.title; }
+    eventDidMount(info) {
+      info.el.title = info.event.title;
+    }
   });
   calendar.render();
 }
+
 function renderCalendarEvents() {
   if (!calendar) return;
   calendar.removeAllEvents();
-  promotions.forEach(p => {
+
+  // 프로모션 → 내부광고 → 외부광고 순 정렬 후 addEvent
+  const sorted = [...promotions].sort((a, b) => {
+    const oa = TYPE_ORDER[a.Type] ?? 9;
+    const ob = TYPE_ORDER[b.Type] ?? 9;
+    return oa !== ob ? oa - ob : (a.Title || '').localeCompare(b.Title || '');
+  });
+
+  sorted.forEach(p => {
     const c = TYPE_COLORS[p.Type] || DEFAULT_COLOR;
-    const endD = p.End_Date ? new Date(p.End_Date+'T00:00:00') : null;
-    if (endD) endD.setDate(endD.getDate()+1);
-    calendar.addEvent({ id:p.ID, title:p.Title, start:p.Start_Date, end:endD?endD.toISOString().split('T')[0]:p.Start_Date, backgroundColor:c.bg, borderColor:c.bd });
+    const endD = p.End_Date ? new Date(p.End_Date + 'T00:00:00') : null;
+    if (endD) endD.setDate(endD.getDate() + 1);
+    calendar.addEvent({
+      id:              p.ID,
+      title:           p.Title,
+      start:           p.Start_Date,
+      end:             endD ? endD.toISOString().split('T')[0] : p.Start_Date,
+      backgroundColor: c.bg,
+      borderColor:     c.bd,
+      extendedProps:   { typeOrder: TYPE_ORDER[p.Type] ?? 9 }
+    });
   });
 }
 function updatePromoStats() {
