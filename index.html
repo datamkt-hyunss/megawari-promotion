@@ -31,16 +31,7 @@
   .season-select:focus{border-color:var(--accent)}
   .season-select option{background:#1c2035}
 
-  /* GAS bar */
-  .gas-url-bar{background:var(--bg-card);border-bottom:1px solid var(--border);padding:.6rem 2rem;display:flex;align-items:center;gap:1rem}
-  .gas-url-input{flex:1;max-width:640px;background:var(--bg-card2);border:1px solid var(--border);color:var(--text-primary);padding:.4rem .8rem;border-radius:6px;font-size:.8rem;font-family:'Space Mono',monospace;outline:none;transition:border-color .2s}
-  .gas-url-input:focus{border-color:var(--teal)}
-  .gas-url-input::placeholder{color:var(--text-muted)}
-  .btn-connect{background:var(--teal);color:#0d0f1a;border:none;padding:.4rem 1rem;border-radius:6px;font-size:.8rem;font-weight:700;cursor:pointer;transition:opacity .2s}
-  .btn-connect:hover{opacity:.85}
-  .connect-status{font-size:.75rem;font-family:'Space Mono',monospace;padding:.25rem .65rem;border-radius:4px}
-  .status-connected{background:rgba(0,212,170,.15);color:var(--teal)}
-  .status-disconnected{background:rgba(255,107,53,.15);color:var(--accent)}
+
 
   /* Tabs */
   .tab-nav{display:flex;padding:0 2rem;background:var(--bg-card);border-bottom:1px solid var(--border)}
@@ -200,13 +191,7 @@
   </div>
 </header>
 
-<!-- GAS URL -->
-<div class="gas-url-bar">
-  <span style="font-size:.75rem;color:var(--text-muted);font-family:'Space Mono',monospace;white-space:nowrap">GAS URL</span>
-  <input type="text" class="gas-url-input" id="gasUrlInput" placeholder="Google Apps Script 웹앱 배포 URL (https://script.google.com/macros/s/...)" />
-  <button class="btn btn-connect" onclick="connectGAS()">연결</button>
-  <span class="connect-status status-disconnected" id="connectStatus">미연결</span>
-</div>
+
 
 <!-- TABS -->
 <nav class="tab-nav">
@@ -404,7 +389,7 @@
 // ══════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════
-let GAS_URL = localStorage.getItem('gasUrl') || '';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzAcuaGWxEyEJRCW1_GIv641U89V_Mo1S5r7O6V17jPS0m21sdOkzlbsTiVwO08Uws0/exec';
 let allProducts = [];      // 전체 (회차 필터 적용)
 let activeCodeFilter = ''; // 현재 선택된 상품코드 필터
 let promotions = [];
@@ -417,14 +402,10 @@ let optBlockSeq = 0;
 // INIT
 // ══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  if (GAS_URL) {
-    document.getElementById('gasUrlInput').value = GAS_URL;
-    updateConnectStatus(true);
-    loadAll();
-  }
+  loadAll();
   initCalendar();
   document.getElementById('seasonSelect').addEventListener('change', () => {
-    if (GAS_URL) { activeCodeFilter = ''; loadProducts(); loadPromotions(); }
+    activeCodeFilter = ''; loadProducts(); loadPromotions();
   });
   document.getElementById('productCode').addEventListener('change', function () {
     const found = indexData.productCodes.find(p => p.code === this.value);
@@ -432,33 +413,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ══════════════════════════════════════════
-// GAS
-// ══════════════════════════════════════════
-function connectGAS() {
-  const url = document.getElementById('gasUrlInput').value.trim();
-  if (!url || !url.startsWith('https://')) { showToast('올바른 GAS 배포 URL을 입력해주세요.', true); return; }
-  GAS_URL = url; localStorage.setItem('gasUrl', url);
-  updateConnectStatus(true); loadAll();
-}
-function updateConnectStatus(ok) {
-  const el = document.getElementById('connectStatus');
-  el.textContent = ok ? '연결됨' : '미연결';
-  el.className = 'connect-status ' + (ok ? 'status-connected' : 'status-disconnected');
-}
+
 
 // ══════════════════════════════════════════
 // API
 // ══════════════════════════════════════════
 async function apiGet(params) {
-  if (!GAS_URL) { showToast('GAS URL을 먼저 연결해주세요.', true); return null; }
   const url = new URL(GAS_URL);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   try { return await (await fetch(url.toString())).json(); }
   catch (e) { showToast('서버 연결 오류: ' + e.message, true); return null; }
 }
 async function apiPost(body) {
-  if (!GAS_URL) { showToast('GAS URL을 먼저 연결해주세요.', true); return null; }
   try {
     return await (await fetch(GAS_URL, {
       method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(body)
@@ -477,7 +443,6 @@ async function loadAll() {
   } finally { showLoading(false); }
 }
 async function refreshData() {
-  if (!GAS_URL) { showToast('GAS URL을 먼저 연결해주세요.', true); return; }
   await loadAll(); showToast('데이터를 새로고침했습니다.');
 }
 
