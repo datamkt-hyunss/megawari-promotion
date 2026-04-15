@@ -206,6 +206,13 @@
 <header class="header">
   <div class="logo">MEGAWARI<span> / Dashboard</span></div>
   <div class="season-wrap">
+    <a href="https://docs.google.com/spreadsheets/d/1foSZUJrStCpAQLLT2DRnLhYT3I5rM4ecS-I3Jg6m_6g/edit?gid=1103082757#gid=1103082757"
+       target="_blank"
+       style="display:inline-flex;align-items:center;gap:.4rem;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);color:var(--teal);padding:.35rem .85rem;border-radius:6px;font-size:.78rem;font-weight:600;text-decoration:none;transition:all .2s;white-space:nowrap"
+       onmouseover="this.style.background='rgba(0,212,170,.2)'"
+       onmouseout="this.style.background='rgba(0,212,170,.1)'">
+      <span>📊</span> 엑셀DB 확인하기
+    </a>
     <span class="season-label">회차 선택</span>
     <select class="season-select" id="seasonSelect"><option value="">전체</option></select>
     <button class="btn btn-secondary btn-sm" onclick="refreshData()">↺ 새로고침</button>
@@ -886,8 +893,8 @@ function initCalendar() {
     headerToolbar: { left:'prev,next today', center:'title', right:'dayGridMonth,timeGridWeek,listMonth' },
     buttonText: { today:'오늘', month:'월', week:'주', list:'목록' },
     eventClick(info) {
-      // ★ info.event.id 는 문자열 — promotions의 ID도 문자열로 비교
-      const p = promotions.find(x => String(x.ID) === String(info.event.id));
+      // ★ ID 조회 없이 extendedProps에 저장된 원본 데이터 직접 사용
+      const p = info.event.extendedProps.promoData;
       if (p) showPromoDetail(p);
     },
     dateClick(info) {
@@ -928,13 +935,16 @@ function renderCalendarEvents() {
     }
 
     calendar.addEvent({
-      id:              String(p.ID), // ★ 명시적으로 문자열
+      id:              String(p.ID),
       title:           p.Title,
       start:           p.Start_Date,
       end:             endStr,
       backgroundColor: c.bg,
       borderColor:     c.bd,
-      extendedProps:   { typeOrder: TYPE_ORDER[p.Type] ?? 9 }
+      extendedProps:   {
+        typeOrder: TYPE_ORDER[p.Type] ?? 9,
+        promoData: p   // ★ 원본 데이터 통째로 저장
+      }
     });
   });
 }
