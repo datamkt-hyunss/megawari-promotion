@@ -875,13 +875,19 @@ function initCalendar() {
   calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
     initialView: 'dayGridMonth',
     locale: 'ko',
-    height: 'auto',          // ★ 셀 높이 자동 확장 (이벤트 수에 따라 늘어남)
-    dayMaxEvents: true,       // ★ 넘치면 "+N more" 로 접기 (겹치지 않음)
-    eventOrder: 'typeOrder,title', // ★ typeOrder 필드 기준 정렬
+    height: 'auto',
+    dayMaxEvents: true,
+    // ★ eventOrder: extendedProps.typeOrder 기준 정렬 (함수로 지정해야 안전)
+    eventOrder: (a, b) => {
+      const oa = (a.extendedProps?.typeOrder ?? 9);
+      const ob = (b.extendedProps?.typeOrder ?? 9);
+      return oa !== ob ? oa - ob : (a.title || '').localeCompare(b.title || '');
+    },
     headerToolbar: { left:'prev,next today', center:'title', right:'dayGridMonth,timeGridWeek,listMonth' },
     buttonText: { today:'오늘', month:'월', week:'주', list:'목록' },
     eventClick(info) {
-      const p = promotions.find(x => x.ID === info.event.id);
+      // ★ info.event.id 는 문자열 — promotions의 ID도 문자열로 비교
+      const p = promotions.find(x => String(x.ID) === String(info.event.id));
       if (p) showPromoDetail(p);
     },
     dateClick(info) {
@@ -900,7 +906,6 @@ function renderCalendarEvents() {
   if (!calendar) return;
   calendar.removeAllEvents();
 
-  // 프로모션 → 내부광고 → 외부광고 순 정렬 후 addEvent
   const sorted = [...promotions].sort((a, b) => {
     const oa = TYPE_ORDER[a.Type] ?? 9;
     const ob = TYPE_ORDER[b.Type] ?? 9;
@@ -909,13 +914,24 @@ function renderCalendarEvents() {
 
   sorted.forEach(p => {
     const c = TYPE_COLORS[p.Type] || DEFAULT_COLOR;
-    const endD = p.End_Date ? new Date(p.End_Date + 'T00:00:00') : null;
-    if (endD) endD.setDate(endD.getDate() + 1);
+
+    // ★ 종료일 버그 수정
+    // GAS에서 'yyyy-MM-dd' 문자열로 오므로 파싱 시 타임존 문제 없이 처리
+    // FullCalendar end는 exclusive → DB 종료일 그대로 +1일만 하면 됨
+    let endStr = p.Start_Date; // 기본값: 시작일과 같음 (하루짜리)
+    if (p.End_Date) {
+      // 'yyyy-MM-dd' 분해 → 타임존 영향 없는 로컬 Date 생성
+      const [y, m, d] = p.End_Date.split('-').map(Number);
+      const endLocal = new Date(y, m - 1, d);
+      endLocal.setDate(endLocal.getDate() + 1); // +1 (exclusive)
+      endStr = `${endLocal.getFullYear()}-${String(endLocal.getMonth()+1).padStart(2,'0')}-${String(endLocal.getDate()).padStart(2,'0')}`;
+    }
+
     calendar.addEvent({
-      id:              p.ID,
+      id:              String(p.ID), // ★ 명시적으로 문자열
       title:           p.Title,
       start:           p.Start_Date,
-      end:             endD ? endD.toISOString().split('T')[0] : p.Start_Date,
+      end:             endStr,
       backgroundColor: c.bg,
       borderColor:     c.bd,
       extendedProps:   { typeOrder: TYPE_ORDER[p.Type] ?? 9 }
